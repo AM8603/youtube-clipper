@@ -82,9 +82,10 @@ async function runWithFallbacks(buildArgsForStrategy, label) {
     const args = buildArgsForStrategy(strategy);
     try {
       return await execFileAsync(YT_DLP_BIN, args);
-    } catch (err) {
+        } catch (err) {
       const clientDesc = strategy.length ? strategy[1] : "yt-dlp default";
-      errors.push(`  - [${clientDesc}] ${err.message.split("\n")[0]}`);
+      const reason = (err.stderr || err.message || "").trim().split("\n").filter(Boolean).pop() || "unknown error";
+      errors.push(`  - [${clientDesc}] ${reason}`);
     }
   }
 
