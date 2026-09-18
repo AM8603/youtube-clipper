@@ -1,0 +1,20 @@
+{
+  "name": "youtube-clipper",
+  "version": "1.1.0",
+  "type": "module",
+  "description": "YouTube -> vertical viral clips pipeline (Node.js backend)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "cli": "node cli.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

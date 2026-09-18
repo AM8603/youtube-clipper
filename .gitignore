@@ -1,0 +1,23 @@
+# Secrets - NEVER commit
+.env
+.env.local
+*.pem
+
+# Dependencies
+node_modules/
+
+# Generated media (large - would break GitHub's 100MB file limit)
+downloads/
+output/
+tmp/
+
+# Local binaries (Windows yt-dlp.exe etc. - Docker installs its own)
+tools/
+*.exe
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+npm-debug.log*

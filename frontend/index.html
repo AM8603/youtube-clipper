@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clipper — long video in, vertical clips out</title>
+<meta name="description" content="Paste a YouTube link and get captioned vertical clips." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0d1b24;
+    --ink-2: #14262f;
+    --line: #23414d;
+    --paper: #eef3f4;
+    --muted: #8aa6b1;
+    --gold: #ffd60a;
+    --rose: #ff6b5e;
+    --radius: 6px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  header { margin-bottom: 40px; }
+  h1 {
+    font-size: clamp(34px, 7vw, 60px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    margin: 0 0 14px;
+  }
+  .sub { color: var(--muted); max-width: 46ch; margin: 0; }
+
+  /* input row styled like a clip timeline */
+  .bar {
+    margin-top: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--ink-2);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .bar input {
+    flex: 1 1 320px;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    color: var(--paper);
+    font: inherit;
+    padding: 18px 20px;
+  }
+  .bar input::placeholder { color: #5d7c88; }
+  .bar input:focus { outline: 2px solid var(--gold); outline-offset: -2px; }
+  button.primary {
+    background: var(--gold);
+    color: #16202a;
+    border: 0;
+    font: inherit;
+    font-weight: 600;
+    padding: 18px 28px;
+    cursor: pointer;
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  button.primary:hover { background: #ffe14d; }
+  button.primary:disabled { background: #3d5560; color: #90a8b2; cursor: not-allowed; }
+  button.primary:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+
+  /* progress: a scrubber, because that's the language of the product */
+  .track { margin-top: 28px; display: none; }
+  .track.on { display: block; }
+  .rail {
+    height: 4px;
+    background: #1d3540;
+    position: relative;
+    overflow: hidden;
+  }
+  .fill {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0%;
+    background: var(--gold);
+    transition: width .6s ease;
+  }
+  .stage {
+    display: flex; justify-content: space-between; gap: 16px;
+    margin-top: 10px; font-size: 14px; color: var(--muted);
+  }
+
+  .note {
+    margin-top: 28px; padding: 14px 16px;
+    border-left: 3px solid var(--rose);
+    background: rgba(255,107,94,.08);
+    font-size: 15px;
+    display: none;
+  }
+  .note.on { display: block; }
+
+  /* results: 9:16 cards, the shape of the output */
+  .reel {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 28px;
+  }
+  .clip { border-top: 1px solid var(--line); padding-top: 16px; }
+  .clip video {
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    background: #000;
+    display: block;
+    border-radius: var(--radius);
+  }
+  .clip h3 { font-size: 17px; margin: 14px 0 6px; font-weight: 600; letter-spacing: -0.01em; }
+  .clip p { margin: 0; font-size: 14px; color: var(--muted); }
+  .meta { font-size: 13px; color: #5d7c88; margin-top: 10px; display: flex; justify-content: space-between; }
+  .meta a { color: var(--gold); text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
+
+  footer { margin-top: 72px; border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: #5d7c88; }
+  details summary { cursor: pointer; color: var(--muted); }
+  .srv { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .srv input { flex: 1 1 260px; padding: 10px 12px; background: var(--ink-2); border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); }
+  .srv button { padding: 10px 16px; background: transparent; border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Long video in.<br />Vertical clips out.</h1>
+    <p class="sub">Paste a YouTube link. The server transcribes it, picks the strongest moments, crops them to 9:16 and burns in word-by-word captions.</p>
+
+    <div class="bar">
+      <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false" />
+      <button class="primary" id="go">Make clips</button>
+    </div>
+
+    <div class="track" id="track">
+      <div class="rail"><div class="fill" id="fill"></div></div>
+      <div class="stage"><span id="stage">Starting…</span><span id="pct">0%</span></div>
+    </div>
+
+    <div class="note" id="note"></div>
+  </header>
+
+  <div class="reel" id="reel"></div>
+
+  <footer>
+    <details>
+      <summary>Server settings</summary>
+      <div class="srv">
+        <input id="backend" placeholder="https://your-app.b4a.run" />
+        <button id="saveBackend">Save</button>
+      </div>
+      <p style="margin-top:10px">Clips are deleted from the server after a couple of hours. Download anything you want to keep.</p>
+    </details>
+  </footer>
+</div>
+
+<script src="config.js"></script>
+<script>
+  const DEFAULT_BACKEND = (window.BACKEND_URL || "").replace(/\/+$/, "");
+  const stored = localStorage.getItem("clipper_backend");
+  let BACKEND = (stored || DEFAULT_BACKEND || window.location.origin).replace(/\/+$/, "");
+
+  const $ = (id) => document.getElementById(id);
+  const goBtn = $("go"), note = $("note"), reel = $("reel");
+  const track = $("track"), fill = $("fill"), stageEl = $("stage"), pctEl = $("pct");
+
+  $("backend").value = BACKEND;
+  $("saveBackend").onclick = () => {
+    BACKEND = $("backend").value.trim().replace(/\/+$/, "");
+    localStorage.setItem("clipper_backend", BACKEND);
+    showNote("Server set to " + BACKEND);
+  };
+
+  function showNote(msg) { note.textContent = msg; note.classList.add("on"); }
+  function clearNote() { note.classList.remove("on"); note.textContent = ""; }
+
+  function setProgress(stage, pct) {
+    track.classList.add("on");
+    stageEl.textContent = stage;
+    pctEl.textContent = Math.round(pct || 0) + "%";
+    fill.style.width = (pct || 0) + "%";
+  }
+
+  goBtn.onclick = async () => {
+    const youtubeUrl = $("url").value.trim();
+    if (!youtubeUrl) { showNote("Paste a YouTube link first."); return; }
+
+    clearNote();
+    reel.innerHTML = "";
+    goBtn.disabled = true;
+    setProgress("Sending to the server…", 2);
+
+    try {
+      const res = await fetch(BACKEND + "/api/clip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ("Server returned " + res.status));
+      poll(data.jobId, 0);
+    } catch (err) {
+      goBtn.disabled = false;
+      track.classList.remove("on");
+      showNote("Could not reach the server. " + err.message +
+        " — check the URL under Server settings, and that the container is running.");
+    }
+  };
+
+  async function poll(jobId, failures) {
+    let job;
+    try {
+      const res = await fetch(BACKEND + "/api/clip/" + jobId);
+      job = await res.json();
+      if (!res.ok) throw new Error(job.error || "job lookup failed");
+    } catch (err) {
+      if (failures > 8) {
+        goBtn.disabled = false;
+        showNote("Lost contact with the server: " + err.message);
+        return;
+      }
+      return setTimeout(() => poll(jobId, failures + 1), 5000);
+    }
+
+    if (job.status === "done") {
+      setProgress("Done", 100);
+      render(job.clips);
+      goBtn.disabled = false;
+      return;
+    }
+    if (job.status === "error") {
+      track.classList.remove("on");
+      goBtn.disabled = false;
+      showNote(job.error || "The job failed.");
+      return;
+    }
+
+    setProgress(job.stage || "Working…", job.progress || 0);
+    if (job.clips && job.clips.length) render(job.clips);
+    setTimeout(() => poll(jobId, 0), 4000);
+  }
+
+  function esc(s) {
+    return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+  }
+
+  function render(clips) {
+    reel.innerHTML = clips.map(c => `
+      <article class="clip">
+        <video controls preload="metadata" playsinline src="${esc(c.url)}"></video>
+        <h3>${esc(c.title)}</h3>
+        <p>${esc(c.reason)}</p>
+        <div class="meta">
+          <span>${c.duration ? c.duration + "s" : ""}</span>
+          <a href="${esc(c.url)}" download>Download</a>
+        </div>
+      </article>`).join("");
+  }
+</script>
+</body>
+</html>
