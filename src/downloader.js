@@ -55,40 +55,58 @@ function writeCookiesFileIfConfigured() {
   return cookiesPath;
 }
 
-function buildCommonArgs(url) {
-  const args = [
-    url,
-    // YouTube's default "logged-in" client (tv_downgraded) is currently
-    // broken for many accounts and throws "The page needs to be reloaded."
-    // Falling back to these clients works around it. See:
-    // https://github.com/yt-dlp/yt-dlp/issues/17389
-    "--extractor-args", "youtube:player_client=default,web_embedded",
-  ];
+// YouTube's blocking behavior is inconsistent right now (see comments in
+// the Dockerfile) -- different videos succeed with different client
+// strategies. Rather than betting on one fixed approach, try several in
+// order and use the first one that works.
+const CLIENT_STRATEGIES = [
+  ["--extractor-args", "youtube:player_client=default,web_embedded"],
+  ["--extractor-args", "youtube:player_client=tv_simply"],
+  ["--extractor-args", "youtube:player_client=web_embedded"],
+  ["--extractor-args", "youtube:player_client=android"],
+  [], // yt-dlp's own default behavior, no override
+];
+
+function buildCommonArgs(url, strategyArgs) {
+  const args = [url, ...strategyArgs];
   const cookiesPath = writeCookiesFileIfConfigured();
   if (cookiesPath) args.push("--cookies", cookiesPath);
   return args;
 }
 
+async function runWithFallbacks(buildArgsForStrategy, label) {
+  const errors = [];
+
+  for (const strategy of CLIENT_STRATEGIES) {
+    const YT_DLP_BIN = process.env.YT_DLP_PATH || "yt-dlp";
+    const args = buildArgsForStrategy(strategy);
+    try {
+      return await execFileAsync(YT_DLP_BIN, args);
+    } catch (err) {
+      const clientDesc = strategy.length ? strategy[1] : "yt-dlp default";
+      errors.push(`  - [${clientDesc}] ${err.message.split("\n")[0]}`);
+    }
+  }
+
+  throw new Error(
+    `yt-dlp (${label}) failed after trying ${CLIENT_STRATEGIES.length} client strategies:\n` +
+    errors.join("\n")
+  );
+}
+
 export async function downloadVideo(url, outputDir, id) {
-  const YT_DLP_BIN = process.env.YT_DLP_PATH || "yt-dlp";
   const outputTemplate = path.join(outputDir, `${id}.%(ext)s`);
 
-  const args = [
-    ...buildCommonArgs(url),
-    "-o", outputTemplate,
-    "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-    "--merge-output-format", "mp4",
-    "--no-playlist",
-  ];
-
-  try {
-    await execFileAsync(YT_DLP_BIN, args);
-  } catch (err) {
-    throw new Error(
-      `yt-dlp (download) failed: ${err.message}. If this is running on a cloud host, ` +
-      `YouTube may be blocking it -- check your cookie env vars.`
-    );
-  }
+  await runWithFallbacks(
+    (strategy) => [
+      ...buildCommonArgs(url, strategy),
+      "-o", outputTemplate,
+      "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+      "--merge-output-format", "mp4",
+      "--no-playlist",
+    ],
+    "download"
+  );
 
   return path.join(outputDir, `${id}.mp4`);
 }
@@ -96,20 +114,16 @@ export async function downloadVideo(url, outputDir, id) {
 // Fetches just the video's duration (no download) so the server can reject
 // videos over its configured length limit before spending time/tokens on them.
 export async function getVideoDurationSeconds(url) {
-  const YT_DLP_BIN = process.env.YT_DLP_PATH || "yt-dlp";
+  const { stdout } = await runWithFallbacks(
+    (strategy) => [
+      ...buildCommonArgs(url, strategy),
+      "--skip-download",
+      "--no-warnings",
+      "--print", "%(duration)s",
+    ],
+    "metadata"
+  );
 
-  const args = [
-    ...buildCommonArgs(url),
-    "--skip-download",
-    "--no-warnings",
-    "--print", "%(duration)s",
-  ];
-
-  try {
-    const { stdout } = await execFileAsync(YT_DLP_BIN, args);
-    const seconds = parseFloat(stdout.trim());
-    return Number.isFinite(seconds) ? seconds : null;
-  } catch (err) {
-    throw new Error(`yt-dlp (metadata) failed: ${err.message}`);
-  }
+  const seconds = parseFloat(stdout.trim());
+  return Number.isFinite(seconds) ? seconds : null;
 }
