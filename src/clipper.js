@@ -1,60 +1,44 @@
-// Cuts a segment, reframes it to vertical 9:16, and burns in the captions -
-// all in ONE ffmpeg pass.
-//
-// FIXES vs original:
-//  - The old code encoded the clip, wrote it to disk, then re-encoded it again
-//    just to burn subtitles. That is 2x the CPU and 2x the disk on a container
-//    that only has 0.25 CPU. One pass halves the work.
-//  - scale/crop now uses force_original_aspect_ratio=increase, so a source
-//    that is already portrait (or square) no longer errors out with
-//    "crop area out of bounds".
-//  - Output size is configurable; 720x1280 is the safe default for free tiers.
-//  - Async (was execSync, which blocked the server for the whole encode).
-import path from "path";
-import { run } from "./runner.js";
+// Cuts a segment out of the source video, reframes it to vertical, and burns
+// in the subtitles -- all in ONE ffmpeg pass. This matters on small
+// containers (e.g. Back4App's 256MB free tier): doing cut+reframe and
+// subtitle-burn as two separate ffmpeg calls (as the original version did)
+// means writing a full intermediate video to disk and running ffmpeg twice;
+// combining them into a single pass roughly halves both time and disk use.
+import { execFile } from "child_process";
+import { promisify } from "util";
 
-function escapeForFilter(p) {
-  // ffmpeg filter args: backslashes break it and ":" reads as a separator.
-  return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
-}
+const execFileAsync = promisify(execFile);
 
 export async function renderClip(inputPath, start, end, assPath, outputPath) {
-  const outW = Number(process.env.CLIP_WIDTH || 720);
-  const outH = Number(process.env.CLIP_HEIGHT || 1280);
-  const duration = Math.max(1, end - start);
+  const width = Number(process.env.CLIP_WIDTH || 720);
+  const height = Number(process.env.CLIP_HEIGHT || 1280);
+  const duration = end - start;
 
-  const filters = [
-    `scale=${outW}:${outH}:force_original_aspect_ratio=increase`,
-    `crop=${outW}:${outH}`,
+  // ffmpeg's filter syntax treats backslashes as escape characters, which
+  // breaks Windows-style paths -- converting to forward slashes (ffmpeg
+  // accepts these fine everywhere) and escaping any colon (drive letters)
+  // avoids that.
+  const escapedAss = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+
+  const vf = `scale=-2:${height},crop=${width}:${height},ass=${escapedAss}`;
+
+  const args = [
+    "-y",
+    "-ss", String(start),
+    "-i", inputPath,
+    "-t", String(duration),
+    "-vf", vf,
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "23",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    outputPath,
   ];
-  if (assPath) filters.push(`ass=${escapeForFilter(assPath)}`);
 
-  await run(
-    "ffmpeg",
-    [
-      "-y",
-      "-ss", String(start),      // fast seek before -i
-      "-i", inputPath,
-      "-t", String(duration),
-      "-vf", filters.join(","),
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "23",
-      "-pix_fmt", "yuv420p",     // required for playback in Safari / iOS
-      "-profile:v", "main",
-      "-movflags", "+faststart", // lets the browser start playing before full download
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-threads", "1",           // 0.25 vCPU: more threads just thrash
-      outputPath,
-    ],
-    { timeoutMs: 20 * 60 * 1000, label: `ffmpeg (clip ${path.basename(outputPath)})` }
-  );
-
-  return outputPath;
-}
-
-// Kept for backwards compatibility with any older scripts.
-export async function cutAndReframe(inputPath, start, end, outputPath) {
-  return renderClip(inputPath, start, end, null, outputPath);
+  try {
+    await execFileAsync("ffmpeg", args);
+  } catch (err) {
+    throw new Error(`ffmpeg render failed: ${err.message}`);
+  }
 }
