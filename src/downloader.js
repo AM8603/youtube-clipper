@@ -56,7 +56,14 @@ function writeCookiesFileIfConfigured() {
 }
 
 function buildCommonArgs(url) {
-  const args = [url];
+  const args = [
+    url,
+    // YouTube's default "logged-in" client (tv_downgraded) is currently
+    // broken for many accounts and throws "The page needs to be reloaded."
+    // Falling back to these clients works around it. See:
+    // https://github.com/yt-dlp/yt-dlp/issues/17389
+    "--extractor-args", "youtube:player_client=default,web_embedded",
+  ];
   const cookiesPath = writeCookiesFileIfConfigured();
   if (cookiesPath) args.push("--cookies", cookiesPath);
   return args;
