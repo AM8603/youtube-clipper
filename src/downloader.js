@@ -27,11 +27,14 @@ function isValidYouTubeUrl(url) {
 
 let cookieFilePath = null;
 function getCookieFile() {
-  const raw = process.env.YTDLP_COOKIES;
-  if (!raw || !raw.trim()) return null;
+  const parts = ["YTDLP_COOKIES", "YTDLP_COOKIES_2", "YTDLP_COOKIES_3"]
+    .map((k) => process.env[k])
+    .filter((v) => v && v.trim());
+  if (parts.length === 0) return null;
   if (cookieFilePath && fs.existsSync(cookieFilePath)) return cookieFilePath;
+  const raw = parts.join("\n").replace(/\\n/g, "\n");
   cookieFilePath = path.join(os.tmpdir(), "yt-cookies.txt");
-  fs.writeFileSync(cookieFilePath, raw.replace(/\\n/g, "\n"), { mode: 0o600 });
+  fs.writeFileSync(cookieFilePath, raw, { mode: 0o600 });
   return cookieFilePath;
 }
 
