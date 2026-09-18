@@ -17,20 +17,23 @@ import os from "os";
 
 const execFileAsync = promisify(execFile);
 
-function readChunkedEnv(prefix) {
-  // Supports splitting a long value across PREFIX_1, PREFIX_2, PREFIX_3, ...
-  // for hosts (like Back4App) that cap individual env var length.
-  const parts = [];
-  let i = 1;
-  while (process.env[`${prefix}_${i}`]) {
-    parts.push(process.env[`${prefix}_${i}`]);
+function readChunkedEnv(baseName) {
+  // Supports a first chunk with no numeric suffix (BASE_NAME) followed by
+  // BASE_NAME_2, BASE_NAME_3, ... for hosts that cap individual env var length.
+  const first = process.env[baseName];
+  if (!first) return null;
+
+  let combined = first;
+  let i = 2;
+  while (process.env[`${baseName}_${i}`]) {
+    combined += process.env[`${baseName}_${i}`];
     i++;
   }
-  return parts.length > 0 ? parts.join("") : null;
+  return combined;
 }
 
 function writeCookiesFileIfConfigured() {
-  const b64 = process.env.YT_COOKIES_B64 || readChunkedEnv("YT_COOKIES_B64");
+  const b64 = readChunkedEnv("YTDLP_COOKIES") || readChunkedEnv("YT_COOKIES_B64");
   if (!b64) return null;
 
   const cookiesPath = path.join(os.tmpdir(), "yt-cookies.txt");
