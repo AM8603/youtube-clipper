@@ -11,10 +11,15 @@ FROM node:20-slim
 # silently freezing you on whatever version existed that day. Bump this
 # value (any change works, e.g. today's date) whenever you rebuild and want
 # a guaranteed-fresh yt-dlp binary.
+#
+# Using the NIGHTLY build, not the stable release: as of Sept 2026, YouTube
+# broke the tv_downgraded client, and the fix (web_embedded fallbacks) has
+# only shipped to yt-dlp's nightly channel so far, not stable. See:
+# https://github.com/yt-dlp/yt-dlp/issues/17389
 ARG YT_DLP_CACHEBUST=2026-09-19
 RUN apt-get update && apt-get install -y ffmpeg curl ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    curl -L https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp && \
     /usr/local/bin/yt-dlp --version
 
