@@ -1,112 +1,78 @@
-// Downloads a YouTube video with the standalone yt-dlp binary.
+// Downloads a YouTube video by calling the standalone yt-dlp binary directly
+// (no Python needed -- the compiled yt-dlp.exe/binary is fully self-contained).
+// Set YT_DLP_PATH in .env if yt-dlp isn't on your system PATH; otherwise this
+// just runs "yt-dlp" and assumes it's reachable.
 //
-// FIXES vs original:
-//  - No hard-coded Windows path (the old .env pointed at C:\Users\... which
-//    made every Linux/Docker deploy fail instantly).
-//  - Caps resolution, because 1080p source files OOM a 256MB container.
-//  - Finds the real output file instead of assuming ".mp4" (yt-dlp sometimes
-//    merges to .mkv/.webm when an mp4 stream pair isn't available).
-//  - Supports cookies for the "Sign in to confirm you're not a bot" wall
-//    that YouTube throws at datacenter IPs.
+// Cloud hosts (Back4App, Render, Railway, etc.) run on datacenter IPs that
+// YouTube often blocks, demanding proof of a logged-in session. To support
+// that, set YT_COOKIES_B64 to your exported cookies.txt content, base64
+// encoded (base64 survives being pasted into an env var intact -- a raw
+// pasted cookies file usually does not, since tabs/newlines get mangled).
+// Leave YT_COOKIES_B64 unset for local use; it's not needed on a home IP.
+import { execFile } from "child_process";
+import { promisify } from "util";
+import path from "path";
 import fs from "fs";
 import os from "os";
-import path from "path";
-import { run } from "./runner.js";
 
-const VIDEO_EXTS = [".mp4", ".mkv", ".webm", ".mov"];
+const execFileAsync = promisify(execFile);
 
-function isValidYouTubeUrl(url) {
-  try {
-    const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "").toLowerCase();
-    return ["youtube.com", "m.youtube.com", "youtu.be", "music.youtube.com"].includes(host);
-  } catch {
-    return false;
+function readChunkedEnv(prefix) {
+  // Supports splitting a long value across PREFIX_1, PREFIX_2, PREFIX_3, ...
+  // for hosts (like Back4App) that cap individual env var length.
+  const parts = [];
+  let i = 1;
+  while (process.env[`${prefix}_${i}`]) {
+    parts.push(process.env[`${prefix}_${i}`]);
+    i++;
   }
+  return parts.length > 0 ? parts.join("") : null;
 }
 
-let cookieFilePath = null;
-function getCookieFile() {
-  const parts = ["YTDLP_COOKIES", "YTDLP_COOKIES_2", "YTDLP_COOKIES_3"]
-    .map((k) => process.env[k])
-    .filter((v) => v && v.trim());
-  if (parts.length === 0) return null;
-  if (cookieFilePath && fs.existsSync(cookieFilePath)) return cookieFilePath;
-  const raw = parts.join("\n").replace(/\\n/g, "\n");
-  cookieFilePath = path.join(os.tmpdir(), "yt-cookies.txt");
-  fs.writeFileSync(cookieFilePath, raw, { mode: 0o600 });
-  return cookieFilePath;
-}
+function writeCookiesFileIfConfigured() {
+  const b64 = process.env.YT_COOKIES_B64 || readChunkedEnv("YT_COOKIES_B64");
+  if (!b64) return null;
 
-export async function getVideoDurationSeconds(url) {
-  const bin = process.env.YT_DLP_PATH || "yt-dlp";
-  const args = ["--no-playlist", "--no-warnings", "--print", "%(duration)s", url];
-  const cookies = getCookieFile();
-  if (cookies) args.unshift("--cookies", cookies);
-  const { stdout } = await run(bin, args, { timeoutMs: 120_000, label: "yt-dlp (metadata)" });
-  const seconds = parseFloat(stdout.trim().split("\n").pop());
-  return Number.isFinite(seconds) ? seconds : 0;
+  const cookiesPath = path.join(os.tmpdir(), "yt-cookies.txt");
+  const decoded = Buffer.from(b64, "base64").toString("utf-8");
+
+  if (!decoded.startsWith("# Netscape HTTP Cookie File") && !decoded.startsWith("# HTTP Cookie File")) {
+    throw new Error(
+      "YT_COOKIES_B64 didn't decode into a valid Netscape cookies file. " +
+      "Make sure you base64-encoded the exact exported cookies.txt content, not a copy-pasted snippet."
+    );
+  }
+
+  fs.writeFileSync(cookiesPath, decoded);
+  return cookiesPath;
 }
 
 export async function downloadVideo(url, outputDir, id) {
-  if (!isValidYouTubeUrl(url)) {
-    throw new Error("That doesn't look like a YouTube URL.");
-  }
-
-  const bin = process.env.YT_DLP_PATH || "yt-dlp";
-  const maxHeight = Number(process.env.MAX_SOURCE_HEIGHT || 720);
+  const YT_DLP_BIN = process.env.YT_DLP_PATH || "yt-dlp";
   const outputTemplate = path.join(outputDir, `${id}.%(ext)s`);
 
   const args = [
-    "--no-playlist",
-    "--no-warnings",
-    "--no-progress",
-    "--retries", "3",
-    "--fragment-retries", "3",
-    "--socket-timeout", "30",
-    "-f",
-    `bestvideo[height<=${maxHeight}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${maxHeight}]/best`,
-    "--merge-output-format", "mp4",
-    "-o", outputTemplate,
     url,
+    "-o", outputTemplate,
+    "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+    "--merge-output-format", "mp4",
+    "--no-playlist",
   ];
 
-  const cookies = getCookieFile();
-  if (cookies) args.unshift("--cookies", cookies);
+  const cookiesPath = writeCookiesFileIfConfigured();
+  if (cookiesPath) {
+    args.push("--cookies", cookiesPath);
+  }
 
   try {
-    await run(bin, args, { timeoutMs: 15 * 60 * 1000, label: "yt-dlp (download)" });
+    await execFileAsync(YT_DLP_BIN, args);
   } catch (err) {
-    const msg = err.message || "";
-    if (/Sign in to confirm|not a bot|cookies/i.test(msg)) {
-      throw new Error(
-        "YouTube blocked this server's IP with a bot check. Set the YTDLP_COOKIES " +
-          "environment variable (see README) to fix it."
-      );
-    }
-    if (/Private video|unavailable|age|members-only|region/i.test(msg)) {
-      throw new Error("That video is private, age-restricted, or unavailable in this region.");
-    }
-    throw new Error(`Download failed: ${msg.slice(-400)}`);
+    throw new Error(
+      `yt-dlp failed to run (${err.message}). Make sure yt-dlp.exe is on your PATH, ` +
+      `or set YT_DLP_PATH in .env to its full file path. If this is running on a cloud ` +
+      `host, YouTube may be blocking it -- set YT_COOKIES_B64 (see downloader.js comments).`
+    );
   }
 
-  // Find whatever file yt-dlp actually produced.
-  const produced = fs
-    .readdirSync(outputDir)
-    .filter((f) => f.startsWith(id) && VIDEO_EXTS.includes(path.extname(f).toLowerCase()))
-    .map((f) => path.join(outputDir, f));
-
-  if (produced.length === 0) {
-    throw new Error("yt-dlp finished but produced no video file.");
-  }
-
-  // Prefer mp4, else biggest file.
-  produced.sort((a, b) => {
-    const ap = path.extname(a) === ".mp4" ? 0 : 1;
-    const bp = path.extname(b) === ".mp4" ? 0 : 1;
-    if (ap !== bp) return ap - bp;
-    return fs.statSync(b).size - fs.statSync(a).size;
-  });
-
-  return produced[0];
+  return path.join(outputDir, `${id}.mp4`);
 }
