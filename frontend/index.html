@@ -12,11 +12,13 @@
   :root {
     --ink: #0d1b24;
     --ink-2: #14262f;
+    --ink-3: #1a323d;
     --line: #23414d;
     --paper: #eef3f4;
     --muted: #8aa6b1;
     --gold: #ffd60a;
     --rose: #ff6b5e;
+    --green: #4ade9a;
     --radius: 6px;
     color-scheme: dark;
   }
@@ -42,7 +44,6 @@
   }
   .sub { color: var(--muted); max-width: 46ch; margin: 0; }
 
-  /* input row styled like a clip timeline */
   .bar {
     margin-top: 32px;
     border: 1px solid var(--line);
@@ -77,25 +78,36 @@
   button.primary:disabled { background: #3d5560; color: #90a8b2; cursor: not-allowed; }
   button.primary:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
 
-  /* progress: a scrubber, because that's the language of the product */
-  .track { margin-top: 28px; display: none; }
+  /* Stepped progress: named milestones, not just a bar */
+  .track { margin-top: 32px; display: none; }
   .track.on { display: block; }
-  .rail {
-    height: 4px;
-    background: #1d3540;
-    position: relative;
-    overflow: hidden;
+  .steps { display: flex; justify-content: space-between; gap: 8px; }
+  .step { flex: 1; text-align: left; }
+  .step .dot-row { display: flex; align-items: center; gap: 8px; }
+  .step .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #2a4753; flex-shrink: 0;
+    transition: background .3s ease;
   }
-  .fill {
-    position: absolute; inset: 0 auto 0 0;
-    width: 0%;
-    background: var(--gold);
-    transition: width .6s ease;
+  .step.done .dot { background: var(--green); }
+  .step.active .dot { background: var(--gold); }
+  .step .line { flex: 1; height: 1px; background: #2a4753; }
+  .step.done .line, .step.active .line { background: var(--green); }
+  .step:last-child .line { display: none; }
+  .step .label {
+    margin-top: 8px; font-size: 12.5px; color: #5d7c88;
+    transition: color .3s ease;
   }
-  .stage {
-    display: flex; justify-content: space-between; gap: 16px;
-    margin-top: 10px; font-size: 14px; color: var(--muted);
+  .step.active .label { color: var(--gold); font-weight: 600; }
+  .step.done .label { color: var(--green); }
+
+  .stage-line {
+    margin-top: 18px; font-size: 15px; color: var(--paper);
+    display: flex; justify-content: space-between; align-items: baseline;
   }
+  .stage-line .pct { color: var(--muted); font-size: 13px; }
+  .rail { margin-top: 10px; height: 3px; background: #1d3540; position: relative; overflow: hidden; border-radius: 2px; }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--gold); transition: width .6s ease; }
 
   .note {
     margin-top: 28px; padding: 14px 16px;
@@ -106,7 +118,6 @@
   }
   .note.on { display: block; }
 
-  /* results: 9:16 cards, the shape of the output */
   .reel {
     margin-top: 48px;
     display: grid;
@@ -123,16 +134,24 @@
   }
   .clip h3 { font-size: 17px; margin: 14px 0 6px; font-weight: 600; letter-spacing: -0.01em; }
   .clip p { margin: 0; font-size: 14px; color: var(--muted); }
-  .meta { font-size: 13px; color: #5d7c88; margin-top: 10px; display: flex; justify-content: space-between; }
-  .meta a { color: var(--gold); text-decoration: none; }
-  .meta a:hover { text-decoration: underline; }
+  .meta { margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .meta .dur { font-size: 13px; color: #5d7c88; }
+  .dl {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--ink-3); border: 1px solid var(--line); color: var(--paper);
+    font: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: var(--radius); cursor: pointer;
+  }
+  .dl:hover { border-color: var(--gold); color: var(--gold); }
+  .dl:disabled { opacity: .5; cursor: wait; }
+  .dl.done { color: var(--green); border-color: var(--green); }
 
   footer { margin-top: 72px; border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: #5d7c88; }
   details summary { cursor: pointer; color: var(--muted); }
   .srv { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
   .srv input { flex: 1 1 260px; padding: 10px 12px; background: var(--ink-2); border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); }
   .srv button { padding: 10px 16px; background: transparent; border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); cursor: pointer; }
-  @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .fill, .dot, .line, .label { transition: none; } }
 </style>
 </head>
 <body>
@@ -147,8 +166,9 @@
     </div>
 
     <div class="track" id="track">
+      <div class="steps" id="steps"></div>
+      <div class="stage-line"><span id="stageText">Starting…</span><span class="pct" id="pct">0%</span></div>
       <div class="rail"><div class="fill" id="fill"></div></div>
-      <div class="stage"><span id="stage">Starting…</span><span id="pct">0%</span></div>
     </div>
 
     <div class="note" id="note"></div>
@@ -176,7 +196,8 @@
 
   const $ = (id) => document.getElementById(id);
   const goBtn = $("go"), note = $("note"), reel = $("reel");
-  const track = $("track"), fill = $("fill"), stageEl = $("stage"), pctEl = $("pct");
+  const track = $("track"), fill = $("fill"), stageText = $("stageText"), pctEl = $("pct");
+  const stepsEl = $("steps");
 
   $("backend").value = BACKEND;
   $("saveBackend").onclick = () => {
@@ -188,11 +209,33 @@
   function showNote(msg) { note.textContent = msg; note.classList.add("on"); }
   function clearNote() { note.classList.remove("on"); note.textContent = ""; }
 
+  // Named milestones mapped to the progress percentage the backend reports
+  // at each stage (see server.js setStage calls). Falls back gracefully
+  // if a simpler backend only ever reports 0 and 100.
+  const MILESTONES = [
+    { label: "Download", at: 5 },
+    { label: "Transcribe", at: 30 },
+    { label: "Find moments", at: 55 },
+    { label: "Render clips", at: 60 },
+  ];
+
+  function renderSteps(progress) {
+    stepsEl.innerHTML = MILESTONES.map((m, i) => {
+      const next = MILESTONES[i + 1];
+      const isDone = progress >= (next ? next.at : 100);
+      const isActive = !isDone && progress >= m.at;
+      const cls = isDone ? "done" : isActive ? "active" : "";
+      return `<div class="step ${cls}"><div class="dot-row"><div class="dot"></div><div class="line"></div></div><div class="label">${m.label}</div></div>`;
+    }).join("");
+  }
+
   function setProgress(stage, pct) {
     track.classList.add("on");
-    stageEl.textContent = stage;
-    pctEl.textContent = Math.round(pct || 0) + "%";
-    fill.style.width = (pct || 0) + "%";
+    const p = pct || 0;
+    stageText.textContent = stage;
+    pctEl.textContent = Math.round(p) + "%";
+    fill.style.width = p + "%";
+    renderSteps(p);
   }
 
   goBtn.onclick = async () => {
@@ -258,17 +301,57 @@
     return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
   }
 
+  function absoluteUrl(u) {
+    try { return new URL(u, BACKEND).href; } catch { return u; }
+  }
+
+  // Browsers ignore the plain `download` attribute for cross-origin links
+  // in many cases (exactly our setup: the page is on Netlify, the video is
+  // on the tunnel/backend domain) -- it just opens the video instead of
+  // saving it. Fetching the file as a blob and saving that always works,
+  // regardless of origin, as long as the server allows CORS (ours does).
+  async function downloadClip(url, filename, btn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Downloading…";
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Download failed (" + res.status + ")");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      btn.textContent = "Saved";
+      btn.classList.add("done");
+      setTimeout(() => { btn.textContent = original; btn.classList.remove("done"); btn.disabled = false; }, 2000);
+    } catch (err) {
+      btn.textContent = "Failed — retry";
+      btn.disabled = false;
+      showNote("Couldn't download that clip: " + err.message);
+    }
+  }
+
   function render(clips) {
-    reel.innerHTML = clips.map(c => `
+    reel.innerHTML = clips.map((c, i) => `
       <article class="clip">
-        <video controls preload="metadata" playsinline src="${esc(c.url)}"></video>
+        <video controls preload="metadata" playsinline src="${esc(absoluteUrl(c.url))}"></video>
         <h3>${esc(c.title)}</h3>
         <p>${esc(c.reason)}</p>
         <div class="meta">
-          <span>${c.duration ? c.duration + "s" : ""}</span>
-          <a href="${esc(c.url)}" download>Download</a>
+          <span class="dur">${c.duration ? c.duration + "s" : ""}</span>
+          <button class="dl" data-i="${i}">Download</button>
         </div>
       </article>`).join("");
+
+    reel.querySelectorAll(".dl").forEach((btn) => {
+      const c = clips[Number(btn.dataset.i)];
+      btn.onclick = () => downloadClip(absoluteUrl(c.url), (c.title || "clip").replace(/[^a-z0-9]+/gi, "_") + ".mp4", btn);
+    });
   }
 </script>
 </body>
