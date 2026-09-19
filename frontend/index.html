@@ -7,52 +7,74 @@
 <meta name="description" content="Paste a YouTube link and get captioned vertical clips." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --ink: #0d1b24;
-    --ink-2: #14262f;
-    --ink-3: #1a323d;
-    --line: #23414d;
-    --paper: #eef3f4;
-    --muted: #8aa6b1;
-    --gold: #ffd60a;
-    --rose: #ff6b5e;
-    --green: #4ade9a;
-    --radius: 6px;
+    --ink: #0a1418;
+    --ink-2: #101e23;
+    --ink-3: #16292f;
+    --line: #22383f;
+    --line-soft: #1a2c32;
+    --paper: #eef4f2;
+    --muted: #7fa0a8;
+    --muted-2: #567179;
+    --accent: #f2b134;
+    --accent-hi: #ffcb63;
+    --accent-ink: #1c1206;
+    --rose: #ff7a6b;
+    --green: #52d9a0;
+    --radius: 8px;
+    --radius-sm: 5px;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    background: var(--ink);
+    background:
+      radial-gradient(1100px 480px at 14% -8%, rgba(242,177,52,.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(82,217,160,.05), transparent 55%),
+      var(--ink);
     color: var(--paper);
     font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
     font-size: 16px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 24px 96px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 64px 24px 100px; }
 
-  header { margin-bottom: 40px; }
-  h1 {
-    font-size: clamp(34px, 7vw, 60px);
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.02;
-    margin: 0 0 14px;
+  header { margin-bottom: 44px; }
+  .kicker {
+    font-size: 13px;
+    color: var(--muted-2);
+    margin: 0 0 16px;
+    letter-spacing: 0.01em;
   }
-  .sub { color: var(--muted); max-width: 46ch; margin: 0; }
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(36px, 6.4vw, 62px);
+    letter-spacing: -0.02em;
+    line-height: 1.04;
+    margin: 0 0 16px;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent-hi);
+  }
+  .sub { color: var(--muted); max-width: 48ch; margin: 0; font-size: 16.5px; }
 
   .bar {
-    margin-top: 32px;
+    margin-top: 36px;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--ink-2);
     display: flex;
     flex-wrap: wrap;
     align-items: stretch;
+    box-shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 20px 40px -28px rgba(0,0,0,.6);
+    transition: border-color .2s ease;
   }
+  .bar:focus-within { border-color: var(--accent); }
   .bar input {
     flex: 1 1 320px;
     min-width: 0;
@@ -60,104 +82,128 @@
     border: 0;
     color: var(--paper);
     font: inherit;
-    padding: 18px 20px;
+    padding: 19px 22px;
   }
-  .bar input::placeholder { color: #5d7c88; }
-  .bar input:focus { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .bar input::placeholder { color: var(--muted-2); }
+  .bar input:focus { outline: none; }
   button.primary {
-    background: var(--gold);
-    color: #16202a;
+    background: var(--accent);
+    color: var(--accent-ink);
     border: 0;
     font: inherit;
     font-weight: 600;
-    padding: 18px 28px;
+    padding: 19px 30px;
     cursor: pointer;
     border-radius: 0 var(--radius) var(--radius) 0;
+    transition: background .15s ease;
+    letter-spacing: -0.01em;
   }
-  button.primary:hover { background: #ffe14d; }
-  button.primary:disabled { background: #3d5560; color: #90a8b2; cursor: not-allowed; }
+  button.primary:hover { background: var(--accent-hi); }
+  button.primary:disabled { background: #2a3a40; color: var(--muted-2); cursor: not-allowed; }
   button.primary:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
 
   /* Stepped progress: named milestones, not just a bar */
-  .track { margin-top: 32px; display: none; }
+  .track { margin-top: 36px; display: none; }
   .track.on { display: block; }
   .steps { display: flex; justify-content: space-between; gap: 8px; }
   .step { flex: 1; text-align: left; }
   .step .dot-row { display: flex; align-items: center; gap: 8px; }
   .step .dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: #2a4753; flex-shrink: 0;
-    transition: background .3s ease;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--line); flex-shrink: 0;
+    transition: background .3s ease, box-shadow .3s ease;
   }
   .step.done .dot { background: var(--green); }
-  .step.active .dot { background: var(--gold); }
-  .step .line { flex: 1; height: 1px; background: #2a4753; }
+  .step.active .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(242,177,52,.15); }
+  .step .line { flex: 1; height: 1px; background: var(--line); }
   .step.done .line, .step.active .line { background: var(--green); }
   .step:last-child .line { display: none; }
   .step .label {
-    margin-top: 8px; font-size: 12.5px; color: #5d7c88;
+    margin-top: 9px; font-size: 12.5px; color: var(--muted-2);
     transition: color .3s ease;
   }
-  .step.active .label { color: var(--gold); font-weight: 600; }
+  .step.active .label { color: var(--accent-hi); font-weight: 600; }
   .step.done .label { color: var(--green); }
 
   .stage-line {
-    margin-top: 18px; font-size: 15px; color: var(--paper);
+    margin-top: 20px; font-size: 15px; color: var(--paper);
     display: flex; justify-content: space-between; align-items: baseline;
   }
-  .stage-line .pct { color: var(--muted); font-size: 13px; }
-  .rail { margin-top: 10px; height: 3px; background: #1d3540; position: relative; overflow: hidden; border-radius: 2px; }
-  .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--gold); transition: width .6s ease; }
+  .stage-line .pct { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .rail { margin-top: 10px; height: 3px; background: var(--line-soft); position: relative; overflow: hidden; border-radius: 2px; }
+  .fill {
+    position: absolute; inset: 0 auto 0 0; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hi));
+    transition: width .6s ease;
+  }
 
   .note {
-    margin-top: 28px; padding: 14px 16px;
+    margin-top: 28px; padding: 15px 18px;
     border-left: 3px solid var(--rose);
-    background: rgba(255,107,94,.08);
+    background: rgba(255,122,107,.08);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     font-size: 15px;
     display: none;
   }
   .note.on { display: block; }
 
   .reel {
-    margin-top: 48px;
+    margin-top: 56px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 28px;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    gap: 30px;
   }
-  .clip { border-top: 1px solid var(--line); padding-top: 16px; }
+  .clip {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    position: relative;
+  }
+  .clip .idx {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 13px;
+    color: var(--muted-2);
+    position: absolute;
+    top: -11px;
+    left: 0;
+    background: var(--ink);
+    padding-right: 8px;
+  }
   .clip video {
     width: 100%;
     aspect-ratio: 9 / 16;
     background: #000;
     display: block;
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-soft);
   }
-  .clip h3 { font-size: 17px; margin: 14px 0 6px; font-weight: 600; letter-spacing: -0.01em; }
+  .clip h3 { font-size: 17px; margin: 15px 0 6px; font-weight: 600; letter-spacing: -0.01em; }
   .clip p { margin: 0; font-size: 14px; color: var(--muted); }
-  .meta { margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .meta .dur { font-size: 13px; color: #5d7c88; }
+  .meta { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .meta .dur { font-size: 13px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
   .dl {
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--ink-3); border: 1px solid var(--line); color: var(--paper);
     font: inherit; font-size: 13px; font-weight: 600;
-    padding: 8px 14px; border-radius: var(--radius); cursor: pointer;
+    padding: 9px 15px; border-radius: var(--radius-sm); cursor: pointer;
+    transition: border-color .15s ease, color .15s ease;
   }
-  .dl:hover { border-color: var(--gold); color: var(--gold); }
-  .dl:disabled { opacity: .5; cursor: wait; }
+  .dl:hover { border-color: var(--accent); color: var(--accent-hi); }
+  .dl:disabled { opacity: .55; cursor: wait; }
   .dl.done { color: var(--green); border-color: var(--green); }
 
-  footer { margin-top: 72px; border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: #5d7c88; }
-  details summary { cursor: pointer; color: var(--muted); }
-  .srv { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
-  .srv input { flex: 1 1 260px; padding: 10px 12px; background: var(--ink-2); border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); }
-  .srv button { padding: 10px 16px; background: transparent; border: 1px solid var(--line); color: var(--paper); font: inherit; font-size: 14px; border-radius: var(--radius); cursor: pointer; }
-  @media (prefers-reduced-motion: reduce) { .fill, .dot, .line, .label { transition: none; } }
+  footer { margin-top: 80px; border-top: 1px solid var(--line); padding-top: 20px; font-size: 13px; color: var(--muted-2); }
+
+  /* Server settings kept in the DOM (so nothing in the JS breaks) but not shown in the UI. */
+  .srv-panel { display: none; }
+
+  @media (prefers-reduced-motion: reduce) { .fill, .dot, .line, .label, .bar, button.primary { transition: none; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Long video in.<br />Vertical clips out.</h1>
+    <p class="kicker">Clipper</p>
+    <h1>Long video in.<br /><em>Vertical clips</em> out.</h1>
     <p class="sub">Paste a YouTube link. The server transcribes it, picks the strongest moments, crops them to 9:16 and burns in word-by-word captions.</p>
 
     <div class="bar">
@@ -177,13 +223,16 @@
   <div class="reel" id="reel"></div>
 
   <footer>
-    <details>
+    <p>Clips are deleted from the server after a couple of hours. Download anything you want to keep.</p>
+
+    <!-- Server settings: hidden from the UI, left in the DOM so the existing
+         JS (BACKEND resolution, localStorage save) keeps working unchanged. -->
+    <details class="srv-panel">
       <summary>Server settings</summary>
       <div class="srv">
         <input id="backend" placeholder="https://your-app.b4a.run" />
         <button id="saveBackend">Save</button>
       </div>
-      <p style="margin-top:10px">Clips are deleted from the server after a couple of hours. Download anything you want to keep.</p>
     </details>
   </footer>
 </div>
@@ -339,6 +388,7 @@
   function render(clips) {
     reel.innerHTML = clips.map((c, i) => `
       <article class="clip">
+        <span class="idx">${String(i + 1).padStart(2, "0")}</span>
         <video controls preload="metadata" playsinline src="${esc(absoluteUrl(c.url))}"></video>
         <h3>${esc(c.title)}</h3>
         <p>${esc(c.reason)}</p>
